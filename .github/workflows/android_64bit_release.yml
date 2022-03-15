@@ -27,7 +27,8 @@ jobs:
     - name: Checkout openvino_contrib
       uses: actions/checkout@v3
       with:
-        repository: openvino_contrib
+        repository: openvinotoolkit/openvino_contrib
+        ref: 2021.4
         path: openvino_contrib
         submodules: true
   
