@@ -1,10 +1,12 @@
-name: Android release
+name: Android 64Bit release
 
 on:
   push:
     branches: [ develop ]
   pull_request:
     branches: [ develop ]
+  release:
+    types: [created]
 
 defaults:
   run:
@@ -70,53 +72,33 @@ jobs:
       working-directory: ${{ runner.temp }}/shadow_build_dir
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=$PWD/install \
               -DTHREADING=SEQ \
               -DIE_EXTRA_MODULES=$OPENVINO_CONTRIB_DIR \
               -DBUILD_java_api=ON \
               -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
               -DANDROID_ABI=arm64-v8a \
-              -DANDROID_PLATFORM=29 \
+              -DANDROID_PLATFORM=30 \
               -DANDROID_STL=c++_shared \
               -DENABLE_SAMPLES=OFF \
               -DENABLE_OPENCV=OFF \
               -DENABLE_CLDNN=OFF \
-              -DENABLE_VPU=OFF \
+              -DENABLE_VPU=ON \
               -DENABLE_GNA=OFF \
-              -DENABLE_MYRIAD=OFF \
+              -DENABLE_MYRIAD=ON \
               -DENABLE_TESTS=OFF \
               -DENABLE_GAPI_TESTS=OFF \
               -DENABLE_BEH_TESTS=OFF $OPENVINO_DIR
-        make --jobs=$(nproc --all)
+        make --jobs=$(nproc --all) install
+        tar czf openvino-android-sdk.tar.gz $PWD/install
 
     - name: ccache post-run
       run: ccache -s
 
-    - name: Get branch name
-      working-directory: ${{ github.workspace }}
-      shell: bash
-      run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/} | sed -e 's/heads\///g')"
-      id: branch
-
-    #- name: S3 sync
-    # uses: jakejarvis/s3-sync-action@v0.5.1
-    # with:
-    #   args: --follow-symlinks
-    # env:
-    #   AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_CI }}
-    #   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    #   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    #   AWS_REGION: 'eu-central-1'
-    #   SOURCE_DIR: 's3upload' 
-    #   DEST_DIR: 'datapilot/${{ matrix.architecture }}/${{ env.QGC_CONFIG }}/${{ env.BUILD_FLAVOUR }}/${{ steps.branch.outputs.branch }}'
-
-    #- name: S3 sync latest
-    # uses: jakejarvis/s3-sync-action@v0.5.1
-    # with:
-    #   args: --follow-symlinks
-    # env:
-    #   AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET_CI }}
-    #   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    #   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    #   AWS_REGION: 'eu-central-1'
-    #   SOURCE_DIR: 's3upload/v${{ steps.version.outputs.version }}'
-    #   DEST_DIR: 'datapilot/${{ matrix.architecture }}/${{ env.QGC_CONFIG }}/${{ env.BUILD_FLAVOUR }}/${{ steps.branch.outputs.branch }}/latest'
+    - name: Upload Release Binaries
+      if: github.event_name == 'release'
+      uses: skx/github-action-publish-binaries@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: '${{ runner.temp }}/shadow_build_dir/openvino-android-sdk.tar.gz'
