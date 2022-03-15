@@ -1,0 +1,104 @@
+name: Android 64Bit release
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+  release:
+    types: [created]
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  OPENVINO_DIR:         ${{ github.workspace }}
+  OPENVINO_CONTRIB_DIR: ${{ github.workspace }}/openvino_contrib
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: Checkout openvino_contrib
+      uses: actions/checkout@v3
+      with:
+        repository: openvinotoolkit/openvino_contrib
+        ref: 2021.4
+        path: openvino_contrib
+        submodules: true
+  
+    - name: Setup JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+
+    - name: Install ccache
+      run:  sudo apt-get install ccache
+
+    - name: Prepare ccache timestamp
+      id: ccache_cache_timestamp
+      shell: cmake -P {0}
+      run: |
+        string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
+        message("::set-output name=timestamp::${current_date}")
+
+    - name: ccache cache files
+      uses: actions/cache@v2
+      with:
+        path:         ~/.ccache
+        key:          ${{ runner.os }}-ccache-${{steps.ccache_cache_timestamp.outputs.timestamp}}
+        restore-keys: ${{ runner.os }}-ccache-
+
+    - name: Setup ccache
+      run: |
+          mkdir -p ~/.ccache
+          echo "base_dir = ${GITHUB_WORKSPACE}" > ~/.ccache/ccache.conf
+          echo "compression = true" >> ~/.ccache/ccache.conf
+          echo "compression_level = 5" >> ~/.ccache/ccache.conf
+          ccache -s
+          ccache -z
+
+    - name: Create build directory
+      run:  mkdir ${{ runner.temp }}/shadow_build_dir
+
+    - name: Build
+      working-directory: ${{ runner.temp }}/shadow_build_dir
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=$PWD/install \
+              -DTHREADING=SEQ \
+              -DIE_EXTRA_MODULES=$OPENVINO_CONTRIB_DIR \
+              -DBUILD_java_api=ON \
+              -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI=arm64-v8a \
+              -DANDROID_PLATFORM=30 \
+              -DANDROID_STL=c++_shared \
+              -DENABLE_SAMPLES=OFF \
+              -DENABLE_OPENCV=OFF \
+              -DENABLE_CLDNN=OFF \
+              -DENABLE_VPU=ON \
+              -DENABLE_GNA=OFF \
+              -DENABLE_MYRIAD=ON \
+              -DENABLE_TESTS=OFF \
+              -DENABLE_GAPI_TESTS=OFF \
+              -DENABLE_BEH_TESTS=OFF $OPENVINO_DIR
+        make --jobs=$(nproc --all) install
+        tar czf openvino-android-sdk.tar.gz $PWD/install
+
+    - name: ccache post-run
+      run: ccache -s
+
+    - name: Upload Release Binaries
+      if: github.event_name == 'release'
+      uses: skx/github-action-publish-binaries@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: '${{ runner.temp }}/shadow_build_dir/openvino-android-sdk.tar.gz'
