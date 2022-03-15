@@ -1,12 +1,12 @@
 name: Android 64Bit release
 
 on:
-  push:
-    branches: [ develop ]
-  pull_request:
-    branches: [ develop ]
   release:
-    types: [created]
+    types: [ created ]
+#  push:
+#    branches: [ develop ]
+#  pull_request:
+#    branches: [ develop ]
 
 defaults:
   run:
@@ -90,10 +90,7 @@ jobs:
               -DENABLE_GAPI_TESTS=OFF \
               -DENABLE_BEH_TESTS=OFF $OPENVINO_DIR
         make --jobs=$(nproc --all) install
-        tar czf openvino-android-sdk.tar.gz $PWD/install
-
-    - name: ccache post-run
-      run: ccache -s
+        tar czvf openvino-android-sdk.tar.gz $PWD/install/deployment_tools
 
     - name: Upload Release Binaries
       if: github.event_name == 'release'
@@ -102,3 +99,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         args: '${{ runner.temp }}/shadow_build_dir/openvino-android-sdk.tar.gz'
+
+    - name: ccache post-run
+      run: ccache -s
