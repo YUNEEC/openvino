@@ -72,7 +72,7 @@ jobs:
       working-directory: ${{ runner.temp }}/shadow_build_dir
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INSTALL_PREFIX=$PWD/install \
+              -DCMAKE_INSTALL_PREFIX=install \
               -DTHREADING=SEQ \
               -DIE_EXTRA_MODULES=$OPENVINO_CONTRIB_DIR \
               -DBUILD_java_api=ON \
@@ -90,15 +90,14 @@ jobs:
               -DENABLE_GAPI_TESTS=OFF \
               -DENABLE_BEH_TESTS=OFF $OPENVINO_DIR
         make --jobs=$(nproc --all) install
-        tar czvf openvino-android-sdk.tar.gz $PWD/install/deployment_tools
+        cd install && zip -y -r openvino-android-aarch64-sdk.zip .
 
     - name: Upload Release Binaries
       if: github.event_name == 'release'
-      uses: skx/github-action-publish-binaries@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: AButler/upload-release-assets@v2.0
       with:
-        args: '${{ runner.temp }}/shadow_build_dir/openvino-android-sdk.tar.gz'
+        files: ${{ runner.temp }}/shadow_build_dir/install/openvino-android-aarch64-sdk.zip
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: ccache post-run
       run: ccache -s
